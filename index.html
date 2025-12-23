@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>英文單字填空測驗（10題）</title>
+  <style>
+    :root { --ok:#0a7; --bad:#c33; --muted:#666; }
+    body { font-family: system-ui, -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 24px; line-height: 1.5; }
+    h1 { margin: 0 0 8px; }
+    .sub { color: var(--muted); margin: 0 0 20px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px 14px; margin: 12px 0; }
+    .qtop { display:flex; gap:10px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+    .qnum { font-weight: 700; }
+    .pos { color: var(--muted); font-size: 0.95rem; }
+    label { display:block; margin-top: 10px; font-size: 0.95rem; color: #222; }
+    input[type="text"] { width: min(520px, 100%); padding: 10px 12px; font-size: 1rem; border: 1px solid #bbb; border-radius: 10px; }
+    input[type="text"].ok { border-color: var(--ok); outline: 2px solid rgba(0,170,120,.15); }
+    input[type="text"].bad { border-color: var(--bad); outline: 2px solid rgba(204,51,51,.12); }
+    .hint { margin-top: 8px; font-size: 0.95rem; }
+    .hint .ok { color: var(--ok); font-weight: 700; }
+    .hint .bad { color: var(--bad); font-weight: 700; }
+    .answer { color: #111; }
+    .toolbar { display:flex; gap:10px; flex-wrap: wrap; margin: 18px 0; }
+    button { padding: 10px 14px; border: 1px solid #333; background: #fff; border-radius: 10px; cursor: pointer; font-size: 1rem; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    #scoreBox { border: 1px solid #111; border-radius: 12px; padding: 14px; margin-top: 18px; display:none; }
+    #scoreLine { font-size: 1.1rem; font-weight: 700; }
+    .small { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+    .note { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <h1>英文單字填空測驗（10題）</h1>
+  <p class="sub">依照中文解釋，填入正確的英文單字（不分大小寫）。完成後按「交卷評分」。</p>
+
+  <div class="toolbar">
+    <button class="primary" id="gradeBtn">交卷評分</button>
+    <button id="resetBtn">重新開始</button>
+    <button id="revealBtn">顯示全部答案</button>
+  </div>
+
+  <div id="quiz"></div>
+
+  <div id="scoreBox">
+    <div id="scoreLine"></div>
+    <div class="small" id="scoreDetail"></div>
+    <div class="note">提示：你可以直接修改答案後再按一次「交卷評分」。</div>
+  </div>
+
+  <script>
+    // 題庫：英文答案 + 詞性 + 中文解釋（你的原始資料）
+    const items = [
+      { a: "accord",       pos: "[n]",  zh: "一致、符合" },
+      { a: "acceptable",   pos: "[a]",  zh: "可接受的, 合意的" },
+      { a: "accident",     pos: "[n]",  zh: "意外事件, 事故" },
+      { a: "account",      pos: "[n/vi/vt]", zh: "計算, 帳目, 說明, 估計, 理由；[vi]說明, 總計有, 認為, 得分；[vt]認為" },
+      { a: "accurate",     pos: "[a]",  zh: "正確的, 精確的" },
+      { a: "ache",         pos: "[n/vi]", zh: "疼痛；[vi]覺得疼痛, 渴望" },
+      { a: "achieve",      pos: "[vt]", zh: "完成, 達到" },
+      { a: "achievement",  pos: "[n]",  zh: "成就, 功勣" },
+      { a: "activity",     pos: "[n]",  zh: "活躍, 活動性, 行動, 行為, 放射性" },
+      { a: "actual",       pos: "[a]",  zh: "實際的, 真實的, 現行的, 目前的" },
+    ];
+
+    // 生成題目（可改成隨機順序：shuffle(items)）
+    const quizEl = document.getElementById("quiz");
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+
+    function render() {
+      quizEl.innerHTML = items.map((it, idx) => {
+        const id = `q${idx}`;
+        return `
+          <div class="card" data-idx="${idx}">
+            <div class="qtop">
+              <div>
+                <span class="qnum">第 ${idx+1} 題</span>
+                <span class="pos"> ${escapeHtml(it.pos)} </span>
+              </div>
+              <div class="pos mono">答案字母：${it.a.length}</div>
+            </div>
+
+            <div style="margin-top:6px;">
+              <span class="pos">中文解釋：</span>
+              <span>${escapeHtml(it.zh)}</span>
+            </div>
+
+            <label for="${id}">請輸入英文單字：</label>
+            <input id="${id}" type="text" autocomplete="off" spellcheck="false" placeholder="例如：accord" />
+
+            <div class="hint" id="${id}-hint" aria-live="polite"></div>
+          </div>
+        `;
+      }).join("");
+      document.getElementById("scoreBox").style.display = "none";
+    }
+
+    function norm(s) {
+      return (s || "").trim().toLowerCase();
+    }
+
+    function grade() {
+      let correct = 0;
+      let answered = 0;
+
+      items.forEach((it, idx) => {
+        const input = document.getElementById(`q${idx}`);
+        const hint = document.getElementById(`q${idx}-hint`);
+        const user = norm(input.value);
+        const ans = norm(it.a);
+
+        input.classList.remove("ok", "bad");
+        hint.innerHTML = "";
+
+        if (user.length > 0) answered++;
+
+        if (user === ans) {
+          correct++;
+          input.classList.add("ok");
+          hint.innerHTML = `<span class="ok">✔ 正確</span>`;
+        } else {
+          input.classList.add("bad");
+          const msg = user.length === 0
+            ? `<span class="bad">✘ 未作答</span>`
+            : `<span class="bad">✘ 錯誤</span>`;
+          hint.innerHTML = `${msg}　正確答案：<span class="answer mono">${escapeHtml(it.a)}</span>`;
+        }
+      });
+
+      const total = items.length;
+      const score = Math.round((correct / total) * 100);
+
+      const box = document.getElementById("scoreBox");
+      box.style.display = "block";
+      document.getElementById("scoreLine").textContent = `分數：${score} 分（${correct} / ${total}）`;
+      document.getElementById("scoreDetail").textContent = `已作答 ${answered} 題；答對 ${correct} 題；答錯/未答 ${total - correct} 題。`;
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function revealAll() {
+      items.forEach((it, idx) => {
+        const input = document.getElementById(`q${idx}`);
+        input.value = it.a;
+      });
+      grade();
+    }
+
+    function resetAll() {
+      render();
+    }
+
+    // 初始化
+    render();
+
+    document.getElementById("gradeBtn").addEventListener("click", grade);
+    document.getElementById("resetBtn").addEventListener("click", resetAll);
+    document.getElementById("revealBtn").addEventListener("click", revealAll);
+
+    // 讓 Enter 直接交卷
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const active = document.activeElement;
+        if (active && active.tagName === "INPUT") {
+          e.preventDefault();
+          grade();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
